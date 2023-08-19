@@ -67,3 +67,4 @@ def get_schedule_from_pdf(pdf_path) -> str:
                     tmp = table_row(trow)
                     table_rows += str(tmp)
     return table_rows
+    
