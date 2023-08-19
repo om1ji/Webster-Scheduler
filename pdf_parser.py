@@ -1,5 +1,13 @@
 import pdfplumber
 
+from pyrogram import Client
+from pyrogram.types import Message
+
+import os
+
+import texts
+import orm
+
 class table_row:
     def __init__(self, row: list):
         self.crs_sec = row[0]
@@ -68,3 +76,30 @@ def get_schedule_from_pdf(pdf_path) -> str:
                     table_rows += str(tmp)
     return table_rows
     
+async def receive_pdf(app: Client, message: Message) -> str:
+    """
+    Принимает pdf-документ с объекта Message, сохраняет в памяти, добавляет запись в бд
+    """
+    document = message.document
+    if document.mime_type == "application/pdf":
+        reply_message = await message.reply("Загрузка")
+
+        file_path = os.path.join("./downloads", document.file_id + ".pdf")
+        await message.download(file_name=file_path) # сохраняет
+
+        headers: table_header = get_data_from_pdf(file_path)[1]
+
+        await app.delete_messages(message.chat.id, reply_message.id)
+        await message.reply(texts.headers.format(headers.classification, 
+                                                 headers.major, 
+                                                 headers.advisor, 
+                                                 headers.program))
+
+        insertion_status:bool = orm.insert(message.from_user.id, 
+                                           message.from_user.username, 
+                                           document.file_id) # запись в бд
+
+        if insertion_status:
+            return "Расписание обновлено"
+        else:
+            return "Расписание добавлено"

@@ -5,7 +5,7 @@ main_keyboard = [
                     KeyboardButton("Обновить расписание"),
                 ]
 
-main_menu = ReplyKeyboardMarkup([main_keyboard])
+main_menu = ReplyKeyboardMarkup([main_keyboard],resize_keyboard=True)
 
 week_keyboard = [ 
                     KeyboardButton("Monday"), 
@@ -16,4 +16,4 @@ week_keyboard = [
                 ]
 
 week_menu = ReplyKeyboardMarkup([week_keyboard, [KeyboardButton("Меню")]], resize_keyboard=True)
-update_menu = ReplyKeyboardMarkup([[KeyboardButton("Отмена")]])
+update_menu = ReplyKeyboardMarkup([[KeyboardButton("Отмена")]], resize_keyboard=True)
