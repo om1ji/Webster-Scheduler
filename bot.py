@@ -29,25 +29,31 @@ patch_manager = patch(app)
 patch_manager.set_storage(MemoryStorage())
 
 @app.on_message(filters.command("start") & StateFilter())
-async def hello(message: Message, state: State) -> None:
-    await app.send_message(message.chat.id,
-                           "Welcome to Webster Scheduler bot",
+async def hello(client, message: Message, state: State):
+    await app.send_message(message.chat.id, 
+                           "Welcome to Webster Scheduler bot", 
                            reply_markup=keyboards.main_menu)
-
+    
     await state.set_state(Parameters.has_no_schedule)
 
+@app.on_message(filters.command("start"))
+async def hello(client, message: Message, state: State):
+    await app.send_message(message.chat.id, 
+                           "Welcome to Webster Scheduler bot", 
+                           reply_markup=keyboards.main_menu)
+
 @app.on_message(filters.document & StateFilter(Parameters.has_no_schedule))
-async def receive_schedule(message: Message, state: State) -> None:
+async def receive_schedule(client, message: Message, state: State) -> None:
     status = await receive_pdf(app, message)
     await app.send_message(message.chat.id, status)
     await state.finish()
 
 @app.on_message(filters.text & StateFilter(Parameters.has_no_schedule))
-async def require_schedule(message: Message) -> None:
+async def require_schedule(client, message: Message, state: State) -> None:
     await message.reply("Загрузи PDF")
 
 @app.on_message(filters.text & filters.regex("Расписание"))
-async def schedule_button_handler(message: Message) -> None:
+async def schedule_button_handler(client, message: Message, state: State) -> None:
     file_path = os.path.abspath("downloads") + "\\" + \
                 orm.select_file_id(message.from_user.id) + ".pdf"
     schedule = get_schedule_from_pdf(file_path)
@@ -57,24 +63,24 @@ async def schedule_button_handler(message: Message) -> None:
                            reply_markup=keyboards.week_menu)
 
 @app.on_message((filters.text & filters.regex("Меню")) | filters.command("start"))
-async def main(message: Message) -> None:
+async def main(client, message: Message, state: State) -> None:
     await app.send_message(message.chat.id,
                             "Welcome to Webster Scheduler bot", 
                             reply_markup=keyboards.main_menu)
 
 @app.on_message(filters.text & filters.regex("Обновить расписание"))
-async def update_schedule_message(message: Message, state: State) -> None:
+async def update_schedule_message(client, message: Message, state: State) -> None:
     await state.set_state(Parameters.updating_schedule)
     await message.reply("Загрузи PDF", reply_markup=keyboards.update_menu)
 
 @app.on_message(filters.document & StateFilter(Parameters.updating_schedule))
-async def update_schedule(message: Message, state: State) -> None:
+async def update_schedule(client, message: Message, state: State) -> None:
     status = await receive_pdf(app, message)
     await app.send_message(message.chat.id, status, reply_markup=keyboards.main_menu)
     await state.finish()
 
 @app.on_message(filters.text & filters.regex("Отмена") & StateFilter(Parameters.updating_schedule))
-async def cancel(message: Message) -> None:
+async def cancel(client, message: Message, state: State) -> None:
     await app.send_message(message.chat.id,
                             "Отменено",
                             reply_markup=keyboards.main_menu)
