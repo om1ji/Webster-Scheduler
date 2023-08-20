@@ -1,9 +1,11 @@
 import pdfplumber
-
 from pyrogram import Client
 from pyrogram.types import Message
 
 import os
+from typing import List
+from functools import cmp_to_key
+from typing import Dict
 
 import texts
 import orm
@@ -15,25 +17,27 @@ class table_row:
         self.title = row[2]
         self.instructor:str = row[3].replace("Email", "")
         self.room = row[6]
-        self.days = row[7]
+        self._days = row[7]
         self.time = row[8][:6] + " " + row[8][6:]
         self.date = row[9][:10] + " " + row[9][10:]
         self.tm = row[10]
         self.type = row[11]
 
-    day_mapping = {
+    day_to_full = {
         "-M-----": "Monday",
         "--T----": "Tuesday",
         "---W---": "Wednesday",
         "----R--": "Thursday",
-        "-----F-": "Friday",
+        "-----F-": "Friday"
     }
 
-    def convert(self, short_day):
-        return self.day_mapping.get(short_day, "Unknown")
-    
+    @property
+    def day(self):
+        return self.day_to_full.get(self._days, "Unknown")
+
     def __str__(self):
-        return f"{self.convert(self.days)} \n{self.crs_sec} {self.hrs} {self.title} {self.instructor} {self.room} {self.time} {self.date} {self.tm} {self.type} \n\n"
+        return f"{self.crs_sec} {self.hrs} {self.title} {self.instructor} {self.room} {self.time} {self.date} {self.tm} {self.type} \n\n"
+
 
 class table_header:
     def __init__(self, headers: list):
@@ -43,27 +47,18 @@ class table_header:
         self.advisor = headers[2].replace("Advisor: ", "")
         self.program = headers[3]    
 
-def get_data_from_pdf(pdf_path) -> list:
+def get_header_from_pdf(pdf_path) -> list:
     with pdfplumber.open(pdf_path) as pdf:
         headers = []
         for page in pdf.pages:
             table = page.extract_tables()[0]
             for row in table[0:4]:  
                 headers.append(row[0])
+        
+    return table_header(headers)
 
-        table_rows = []
-        for page in pdf.pages:
-            table = page.extract_tables()[0]  
-            for row in table[5:-1]:
-                trow = [item for item in row if item is not None] 
-                trow = [str(item).replace("\n", "") for item in trow]
-                if trow != ['']:
-                    table_rows.append(str(table_row(trow)))
-
-    return table_rows, table_header(headers)
-
-def get_schedule_from_pdf(pdf_path) -> str:
-    table_rows = ""
+def get_schedule_from_pdf(pdf_path: str) -> list:
+    table_rows = []
 
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
@@ -72,9 +67,22 @@ def get_schedule_from_pdf(pdf_path) -> str:
                 trow = [item for item in row if item is not None] 
                 trow = [str(item).replace("\n", "") for item in trow]
                 if trow != ['']:
-                    tmp = table_row(trow)
-                    table_rows += str(tmp)
+                    table_rows.append(table_row(trow))
+                    
     return table_rows
+
+def prepare_for_schedule_table(pdf_path: str) -> Dict[str, str]:
+    result = {"monday": "",
+              "tuesday": "",
+              "wednesday": "",
+              "thursday": "",
+              "friday": ""}
+    
+    schedule = get_schedule_from_pdf(pdf_path=pdf_path)
+    for i in schedule:
+        result[i.day.lower()] += str(i)
+
+    return result
     
 async def receive_pdf(app: Client, message: Message) -> str:
     """
@@ -87,7 +95,7 @@ async def receive_pdf(app: Client, message: Message) -> str:
         file_path = os.path.join("./downloads", document.file_id + ".pdf")
         await message.download(file_name=file_path) # сохраняет
 
-        headers: table_header = get_data_from_pdf(file_path)[1]
+        headers = get_header_from_pdf(file_path)
 
         await app.delete_messages(message.chat.id, reply_message.id)
         await message.reply(texts.headers.format(headers.classification, 
@@ -95,11 +103,20 @@ async def receive_pdf(app: Client, message: Message) -> str:
                                                  headers.advisor, 
                                                  headers.program))
 
+        schedule: dict = prepare_for_schedule_table(file_path)
+
         insertion_status:bool = orm.insert(message.from_user.id, 
                                            message.from_user.username, 
-                                           document.file_id) # запись в бд
+                                           document.file_id,
+                                           schedule) # запись в бд
+        
 
         if insertion_status:
             return "Расписание обновлено"
         else:
             return "Расписание добавлено"
+        
+def compare_days(day1: table_row, day2: table_row):
+    days_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    return days_order.index(day1) - days_order.index(day2)
+

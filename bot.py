@@ -15,7 +15,7 @@ from pyrogram_patch import patch
 import orm
 import keyboards
 import consts
-from pdf_parser import receive_pdf, get_schedule_from_pdf
+from pdf_parser import receive_pdf
 from states import Parameters
 
 app = Client(
@@ -28,6 +28,8 @@ app = Client(
 patch_manager = patch(app)
 patch_manager.set_storage(MemoryStorage())
 
+# Initial
+
 @app.on_message(filters.command("start") & StateFilter())
 async def hello(client, message: Message, state: State):
     await app.send_message(message.chat.id, 
@@ -36,30 +38,32 @@ async def hello(client, message: Message, state: State):
     
     await state.set_state(Parameters.has_no_schedule)
 
-@app.on_message(filters.command("start"))
-async def hello(client, message: Message, state: State):
-    await app.send_message(message.chat.id, 
-                           "Welcome to Webster Scheduler bot", 
-                           reply_markup=keyboards.main_menu)
-
 @app.on_message(filters.document & StateFilter(Parameters.has_no_schedule))
 async def receive_schedule(client, message: Message, state: State) -> None:
     status = await receive_pdf(app, message)
     await app.send_message(message.chat.id, status)
     await state.finish()
 
+# Main menu
+
+@app.on_message(filters.command("start"))
+async def hello(client, message: Message, state: State):
+    await app.send_message(message.chat.id, 
+                           "Welcome to Webster Scheduler bot", 
+                           reply_markup=keyboards.main_menu)
+
+# Require schedule if not provided
+
 @app.on_message(filters.text & StateFilter(Parameters.has_no_schedule))
 async def require_schedule(client, message: Message, state: State) -> None:
     await message.reply("Загрузи PDF")
 
+# Get current schedule
+
 @app.on_message(filters.text & filters.regex("Расписание"))
 async def schedule_button_handler(client, message: Message, state: State) -> None:
-    file_path = os.path.abspath("downloads") + "\\" + \
-                orm.select_file_id(message.from_user.id) + ".pdf"
-    schedule = get_schedule_from_pdf(file_path)
-
     await app.send_message(message.chat.id,
-                           schedule,
+                           "Выбери день",
                            reply_markup=keyboards.week_menu)
 
 @app.on_message((filters.text & filters.regex("Меню")) | filters.command("start"))
@@ -67,6 +71,23 @@ async def main(client, message: Message, state: State) -> None:
     await app.send_message(message.chat.id,
                             "Welcome to Webster Scheduler bot", 
                             reply_markup=keyboards.main_menu)
+
+# Get daily schedule 
+
+@app.on_message(filters.text & (filters.regex("Monday") | \
+                                filters.regex("Tuesday") | \
+                                filters.regex("Wednesday") | \
+                                filters.regex("Thursday") | \
+                                filters.regex("Friday"))
+                )
+async def get_day_schedule(client, message: Message) -> None:
+    result = orm.get_day_schedule(message.from_user.id, message.text.lower())
+    if result:
+        await message.reply(result)
+    else:
+        await message.reply("На этот день нет занятий")
+
+# Update schedule
 
 @app.on_message(filters.text & filters.regex("Обновить расписание"))
 async def update_schedule_message(client, message: Message, state: State) -> None:
@@ -87,6 +108,7 @@ async def cancel(client, message: Message, state: State) -> None:
 
 if __name__=="__main__":
     try:
+        orm.create()
         app.run()
     except KeyboardInterrupt:
         orm.conn.close()
