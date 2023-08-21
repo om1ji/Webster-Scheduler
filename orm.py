@@ -35,7 +35,20 @@ def create():
     conn.commit()
 
 # Вставка данных в таблицу users
-def insert(user_id: int, user_name: str, file_link: str, schedule: Dict[str, str]) -> bool:
+def insert(user_id: int, user_name: str, file_id: str, schedule: Dict[str, str]) -> bool:
+    """Делает запись в базу данных. Создаёт новую, если пользователя нет в базе. 
+    Обновляет, если пользователь уже есть
+
+    Args:
+        user_id (int): User ID пользователя в Telegram
+        user_name (str): Username пользователя (@user)
+        file_id (str): ID файла, присваиваемый Телеграмом
+        schedule (Dict[str, str]): Словарь, хранящий в себе расписание на каждый день недели
+
+    Returns:
+        bool: True, если пользователь уже был в базе и произошло обновление записи. 
+        False, если пользователя не было и была внесена новая запись
+    """
     select_query = '''
         SELECT * FROM users WHERE user_id = ?;
     '''
@@ -46,7 +59,7 @@ def insert(user_id: int, user_name: str, file_link: str, schedule: Dict[str, str
         update_data_query = '''
             UPDATE users SET file_id = ? WHERE user_id = ?;
         '''
-        cursor.execute(update_data_query, (file_link, user_id))
+        cursor.execute(update_data_query, (file_id, user_id))
         conn.commit()
 
         query = '''
@@ -68,7 +81,7 @@ def insert(user_id: int, user_name: str, file_link: str, schedule: Dict[str, str
             INSERT INTO users (username, user_id, file_id) VALUES (?, ?, ?);
         '''
 
-        user_data = (user_name, user_id, file_link)
+        user_data = (user_name, user_id, file_id)
         cursor.execute(insert_data_query, user_data)
         conn.commit()
 
@@ -90,6 +103,16 @@ def insert(user_id: int, user_name: str, file_link: str, schedule: Dict[str, str
     return existing_record
 
 def get_day_schedule(user_id: int, day: str) -> str:
+    
+    """Извлекает данные из базы данных о расписании в зависимости от указанного дня недели
+
+    Args:
+        user_id (int): User ID пользователя в Telegram 
+        day (str): День недели ("monday", "tuesday", ...)
+    Returns:
+        str: Список занятий на указанный день недели
+
+    """    
     query = """SELECT {} FROM schedule WHERE user_id = ?""".format(day)
     cursor.execute(query, (user_id,))
     result = cursor.fetchall()
