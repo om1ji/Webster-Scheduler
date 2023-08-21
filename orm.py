@@ -13,6 +13,7 @@ def create():
             user_id INTEGER,
             username TEXT,
             file_id TEXT,
+            notification_time TEXT,
             UNIQUE(user_id, file_id)
         );
     '''
@@ -149,4 +150,13 @@ def check_for_prescense(user_id: int) -> bool:
     if result:
         return True
     else:
+        return False
+    
+def save_notification_preference(user_id: int, time: str) -> bool:
+    query = """UPDATE users SET time = ? WHERE user_id = ?"""
+    try:
+        cursor.execute(query, ("new_value",))
+        conn.commit()
+        return True
+    except sqlite3.Error as e:
         return False

@@ -1,4 +1,5 @@
-from pyrogram.types import KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram.types import KeyboardButton, ReplyKeyboardMarkup
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 main_keyboard = [
                     KeyboardButton("Расписание"),
@@ -17,3 +18,10 @@ week_keyboard = [
 
 week_menu = ReplyKeyboardMarkup([week_keyboard, [KeyboardButton("Обновить расписание"), KeyboardButton("Меню")]], resize_keyboard=True)
 update_menu = ReplyKeyboardMarkup([[KeyboardButton("Отмена")]], resize_keyboard=True)
+
+notification_menu = InlineKeyboardMarkup(
+    [
+        [InlineKeyboardButton("9pm", callback_data="9pm")],
+        [InlineKeyboardButton("7am", callback_data="7am")],
+    ]
+)

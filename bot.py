@@ -4,19 +4,25 @@ Pyrogram framework for Telegram bot
 Custom modules and pdf worker
 """
 import os
+from datetime import datetime
 
 from pyrogram import Client, filters
-from pyrogram.types import Message
+from pyrogram.types import Message, CallbackQuery
 from pyrogram_patch.fsm.storages import MemoryStorage
 from pyrogram_patch.fsm.filter import StateFilter
+from pyrogram.types import CallbackQuery
 from pyrogram_patch.fsm import State
 from pyrogram_patch import patch
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 import orm
 import keyboards
 import consts
 from pdf_parser import receive_pdf
 from states import Parameters
+import utils
 
 app = Client(
                 name="webster",
@@ -28,8 +34,10 @@ app = Client(
 patch_manager = patch(app)
 patch_manager.set_storage(MemoryStorage())
 
-async def auto_delete_message(message: Message) -> None:
-    app.delete_messages(message.chat.id, message.id)
+scheduler = AsyncIOScheduler()
+
+async def notify(user_id: int):
+    await app.send_message(user_id, "Test")
 
 # Initial
 
@@ -50,9 +58,17 @@ async def receive_schedule(client, message: Message, state: State) -> None:
 # Main menu
 
 @app.on_message(filters.command("start"))
-async def hello(client, message: Message, state: State):
+async def hello(client, message: Message, state: State) -> None:
     await app.send_message(message.chat.id, 
                            "Welcome to Webster Scheduler bot", 
+                           reply_markup=keyboards.main_menu)
+
+# Debug
+@app.on_message(filters.command("debug"))
+async def debug(client, message: Message) -> None:
+    response = [job for job in scheduler.get_jobs()]
+    await app.send_message(message.chat.id, 
+                            str(response),
                            reply_markup=keyboards.main_menu)
 
 # Require schedule if not provided
@@ -65,7 +81,6 @@ async def require_schedule(client, message: Message, state: State) -> None:
 
 @app.on_message(filters.text & filters.regex("Расписание"))
 async def schedule_button_handler(client, message: Message, state: State) -> None:
-    await auto_delete_message(message)
     await app.send_message(message.chat.id,
                            "Выбери день",
                            reply_markup=keyboards.week_menu)
@@ -88,7 +103,7 @@ async def main(client, message: Message, state: State) -> None:
 async def get_day_schedule(client, message: Message) -> None:
     result = orm.get_day_schedule(message.from_user.id, message.text.lower())
     if result:
-        await message.reply(result)
+        await message.reply(result, reply_markup=keyboards.notification_menu)
     else:
         await message.reply("На этот день нет занятий")
 
@@ -103,8 +118,6 @@ async def update_schedule_message(client, message: Message, state: State) -> Non
 async def update_schedule(client, message: Message, state: State) -> None:
     status = await receive_pdf(app, message)
     await app.send_message(message.chat.id, status, reply_markup=keyboards.main_menu)
-    await auto_delete_message(message)
-    
     await state.finish()
 
 @app.on_message(filters.text & filters.regex("Отмена") & StateFilter(Parameters.updating_schedule))
@@ -113,20 +126,26 @@ async def cancel(client, message: Message, state: State) -> None:
                             "Отменено",
                             reply_markup=keyboards.main_menu)
     
-    await auto_delete_message(message)
+# Inline buttons
+
+@app.on_callback_query(filters.regex("9pm") | filters.regex("7am"))
+async def notify_handler(client, callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    orm.save_notification_preference(user_id, callback_query.data)
+    time = utils.ampm_to_string(callback_query.data)
+    scheduler.add_job(notify, CronTrigger(hour=time), args=[callback_query.from_user.id])
+    await callback_query.message.edit_text(f"Set to notify you at {time}")
 
 if __name__=="__main__":
     try:
         orm.create()
+        scheduler.start()
         app.run()
     except KeyboardInterrupt:
         orm.conn.close()
         app.stop()
 
-# уведомление строго в одно время, два варианта (семь утра в день пары, девять вечера накануне пары)
 # приходит сообщение расписание грядущего дня
 # Уведомления - When to notify - Две инлайн кнопки, два варианта
-# Можно и вечером и утром сделать напоминалку
 #
 # Feedback support
-# Удаление сообщений, чтобы не делать длинную историю
