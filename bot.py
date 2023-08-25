@@ -1,11 +1,7 @@
 """
-os library for paths
 Pyrogram framework for Telegram bot
 Custom modules and pdf worker
 """
-import os
-from datetime import datetime
-
 from pyrogram import Client, filters
 from pyrogram.types import Message, CallbackQuery
 from pyrogram_patch.fsm.storages import MemoryStorage
@@ -13,7 +9,6 @@ from pyrogram_patch.fsm.filter import StateFilter
 from pyrogram.types import CallbackQuery
 from pyrogram_patch.fsm import State
 from pyrogram_patch import patch
-from pyrogram.errors.exceptions.bad_request_400 import MessageEmpty
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -113,12 +108,11 @@ async def main(client, message: Message, state: State) -> None:
                 )
 async def get_day_schedule(client, message: Message) -> None:
     result = orm.get_day_schedule(message.from_user.id, message.text.lower())
-    if result:
-        try:
-            for i in result:
-                await message.reply(i, reply_markup=keyboards.notification_menu)
-        except MessageEmpty:
-            print("Message empty error, а так всё норм")
+    await app.delete_messages(message.chat.id, message.id)
+    if result != [('',), ('',)]:
+        result = result[0][0].split("\n\n")
+        for i in result[:-1]: # Ответ с fetchall приходит в виде (obj, obj,)
+            await message.reply(message.text + "\n\n" + i, reply_markup=keyboards.notification_menu)
     else:
         await message.reply("На этот день нет занятий")
 
@@ -146,22 +140,32 @@ async def cancel(client, message: Message, state: State) -> None:
 @app.on_callback_query(filters.regex("9pm") | filters.regex("7am"))
 async def notify_handler(client, callback_query: CallbackQuery):
     time = utils.ampm_to_string(callback_query.data)
-    scheduler.add_job(notify, CronTrigger(hour=time), args=[callback_query.from_user.id, callback_query.message.text])
-
-if __name__=="__main__":
-    try:
+    day_of_week = callback_query.message.text.lower().split("\n\n")[0][0:3]
+    scheduler.add_job(notify, 
+                      CronTrigger(hour=time, day_of_week=day_of_week), 
+                      args=[callback_query.from_user.id, callback_query.message.text]
+                      )
+    await app.delete_messages(callback_query.from_user.id, callback_query.message.id)
+    
+    await app.answer_callback_query(callback_query.id,
+                                    text=f"Notification set to {callback_query.data}",
+                                    show_alert=True)
+def main() -> None:
+    try:  
         orm.create()
         scheduler.start()
         app.run()
     except KeyboardInterrupt:
         orm.conn.close()
+        scheduler.shutdown()
         app.stop()
 
-# приходит сообщение расписание грядущего дня
-# Уведомления - When to notify - Две инлайн кнопки, два варианта
+if __name__=="__main__":
+    main()
+
 #
 # Feedback support
-#Leave Feedback -> Выходит список из кнопок учителей, 
+# Leave Feedback -> Выходит список из кнопок учителей, 
 # которых взяли из расписания. Нажимаем на кнопку учителя -> 
 # Сообщение-приглашение написать фидбек. Пользователь пишет 
 # фидбек. отправляет боту, бот сохраняет в базе данных.

@@ -21,8 +21,29 @@ update_menu = ReplyKeyboardMarkup([[KeyboardButton("Отмена")]], resize_key
 
 notification_menu = InlineKeyboardMarkup(
     [
-        [InlineKeyboardButton("9pm", callback_data="9pm")],
-        [InlineKeyboardButton("7am", callback_data="7am")],
+        [InlineKeyboardButton("9pm", callback_data="9pm"),
+        InlineKeyboardButton("7am", callback_data="7am")]
+    ]
+)
+
+notification_menu_9pm = InlineKeyboardMarkup(
+    [
+        [InlineKeyboardButton("9pm ✅", callback_data="9pm"),
+        InlineKeyboardButton("7am", callback_data="7am")]
+    ]
+)
+
+notification_menu_7am = InlineKeyboardMarkup(
+    [
+        [InlineKeyboardButton("9pm ", callback_data="9pm"),
+        InlineKeyboardButton("7am ✅", callback_data="7am")]
+    ]
+)
+
+notification_menu_both = InlineKeyboardMarkup(
+    [
+        [InlineKeyboardButton("9pm ✅", callback_data="9pm"),
+        InlineKeyboardButton("7am ✅", callback_data="7am")]
     ]
 )
 

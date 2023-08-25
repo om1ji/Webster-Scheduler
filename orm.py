@@ -1,5 +1,7 @@
 import sqlite3
+import ast
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from typing import Dict
 
 conn = sqlite3.connect('webster.db')
@@ -30,8 +32,26 @@ def create():
             friday TEXT
         );
         '''
-
+    
     cursor.execute(create_table_query)
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS jobs (
+            id INTEGER PRIMARY KEY,
+            job_id TEXT NOT NULL,
+            job_type TEXT NOT NULL,
+            job_args TEXT
+        )
+    ''')
+
+    create_jobs_table_query = """
+        CREATE TABLE IF NOT EXISTS schedule (
+            id INTEGER PRIMARY KEY,
+            user_id INTEGER,
+            text TEXT
+        );
+        '''
+"""
 
     conn.commit()
 
@@ -111,12 +131,12 @@ def get_day_schedule(user_id: int, day: str) -> list:
         user_id (int): User ID пользователя в Telegram 
         day (str): День недели ("monday", "tuesday", ...)
     Returns:
-        str: Список занятий на указанный день недели
+        list: Список занятий на указанный день недели
 
     """    
     query = """SELECT {} FROM schedule WHERE user_id = ?""".format(day)
     cursor.execute(query, (user_id,))
-    result = cursor.fetchall()[0][0].split("\n\n")
+    result = cursor.fetchall()
     if result:
         return result
     else:
@@ -151,3 +171,5 @@ def check_for_prescense(user_id: int) -> bool:
         return True
     else:
         return False
+
+# def save_notification(user_id: int, text: str) -> None:
