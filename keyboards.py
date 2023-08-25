@@ -25,3 +25,5 @@ notification_menu = InlineKeyboardMarkup(
         [InlineKeyboardButton("7am", callback_data="7am")],
     ]
 )
+
+feedback_menu = ReplyKeyboardMarkup([KeyboardButton("")])

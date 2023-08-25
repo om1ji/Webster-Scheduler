@@ -103,7 +103,7 @@ def insert(user_id: int, user_name: str, file_id: str, schedule: Dict[str, str])
 
     return existing_record
 
-def get_day_schedule(user_id: int, day: str) -> str:
+def get_day_schedule(user_id: int, day: str) -> list:
     
     """Извлекает данные из базы данных о расписании в зависимости от указанного дня недели
 
@@ -116,9 +116,9 @@ def get_day_schedule(user_id: int, day: str) -> str:
     """    
     query = """SELECT {} FROM schedule WHERE user_id = ?""".format(day)
     cursor.execute(query, (user_id,))
-    result = cursor.fetchall()
+    result = cursor.fetchall()[0][0].split("\n\n")
     if result:
-        return result[0][0]
+        return result
     else:
         return None
 
@@ -150,13 +150,4 @@ def check_for_prescense(user_id: int) -> bool:
     if result:
         return True
     else:
-        return False
-    
-def save_notification_preference(user_id: int, time: str) -> bool:
-    query = """UPDATE users SET time = ? WHERE user_id = ?"""
-    try:
-        cursor.execute(query, ("new_value",))
-        conn.commit()
-        return True
-    except sqlite3.Error as e:
         return False

@@ -7,8 +7,7 @@ import orm
 main_menu = InlineKeyboardMarkup(
     [
         [InlineKeyboardButton("Расписание", callback_data="schedule")],
-        [InlineKeyboardButton("Notifications", callback_data="notifications")],
-        # ... Other buttons ...
+        [InlineKeyboardButton("Notifications", callback_data="notifications")]
     ]
 )
 

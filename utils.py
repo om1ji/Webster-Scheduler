@@ -12,7 +12,7 @@ def ampm_to_string(input_str: str) -> str:
     """
     try:
         dt = datetime.strptime(input_str, '%I%p')
-        return dt.strftime('%H')
+        return dt.hour - 2 # Timezone correction
     except ValueError:
         return None
     

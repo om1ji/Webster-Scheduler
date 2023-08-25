@@ -13,6 +13,7 @@ from pyrogram_patch.fsm.filter import StateFilter
 from pyrogram.types import CallbackQuery
 from pyrogram_patch.fsm import State
 from pyrogram_patch import patch
+from pyrogram.errors.exceptions.bad_request_400 import MessageEmpty
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -20,9 +21,10 @@ from apscheduler.triggers.cron import CronTrigger
 import orm
 import keyboards
 import consts
-from pdf_parser import receive_pdf
+from pdf_parser import receive_pdf, parse_notification
 from states import Parameters
 import utils
+import texts
 
 app = Client(
                 name="webster",
@@ -36,8 +38,17 @@ patch_manager.set_storage(MemoryStorage())
 
 scheduler = AsyncIOScheduler()
 
-async def notify(user_id: int):
-    await app.send_message(user_id, "Test")
+async def notify(user_id: int, text: str) -> None:
+    result = parse_notification(text)
+    message_text = texts.notification.format(result.crs_sec, 
+                                             result.hrs,
+                                             result.title,
+                                             result.instructor,
+                                             result.time,
+                                             result.building,
+                                             result.room)
+    print(message_text)
+    await app.send_message(user_id, message_text)
 
 # Initial
 
@@ -82,7 +93,7 @@ async def require_schedule(client, message: Message, state: State) -> None:
 @app.on_message(filters.text & filters.regex("Расписание"))
 async def schedule_button_handler(client, message: Message, state: State) -> None:
     await app.send_message(message.chat.id,
-                           "Выбери день",
+                           "Выбери день bruh",
                            reply_markup=keyboards.week_menu)
     
 
@@ -103,7 +114,11 @@ async def main(client, message: Message, state: State) -> None:
 async def get_day_schedule(client, message: Message) -> None:
     result = orm.get_day_schedule(message.from_user.id, message.text.lower())
     if result:
-        await message.reply(result, reply_markup=keyboards.notification_menu)
+        try:
+            for i in result:
+                await message.reply(i, reply_markup=keyboards.notification_menu)
+        except MessageEmpty:
+            print("Message empty error, а так всё норм")
     else:
         await message.reply("На этот день нет занятий")
 
@@ -130,11 +145,8 @@ async def cancel(client, message: Message, state: State) -> None:
 
 @app.on_callback_query(filters.regex("9pm") | filters.regex("7am"))
 async def notify_handler(client, callback_query: CallbackQuery):
-    user_id = callback_query.from_user.id
-    orm.save_notification_preference(user_id, callback_query.data)
     time = utils.ampm_to_string(callback_query.data)
-    scheduler.add_job(notify, CronTrigger(hour=time), args=[callback_query.from_user.id])
-    await callback_query.message.edit_text(f"Set to notify you at {time}")
+    scheduler.add_job(notify, CronTrigger(hour=time), args=[callback_query.from_user.id, callback_query.message.text])
 
 if __name__=="__main__":
     try:
@@ -149,3 +161,10 @@ if __name__=="__main__":
 # Уведомления - When to notify - Две инлайн кнопки, два варианта
 #
 # Feedback support
+#Leave Feedback -> Выходит список из кнопок учителей, 
+# которых взяли из расписания. Нажимаем на кнопку учителя -> 
+# Сообщение-приглашение написать фидбек. Пользователь пишет 
+# фидбек. отправляет боту, бот сохраняет в базе данных.
+# 
+# Check feedback -> Пишут имя учителя, как в расписании ->
+# 

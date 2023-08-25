@@ -18,11 +18,12 @@ class table_row:
         self.instructor:str = row[3].replace("Email", "")
         self.room = row[6]
         self._days = row[7]
+        self.building = row[5]
         self.time = row[8][:6] + " " + row[8][6:]
         self.date = row[9][:10] + " " + row[9][10:]
         self.tm = row[10]
         self.type = row[11]
-
+    
     day_to_full = {
         "-M-----": "Monday",
         "--T----": "Tuesday",
@@ -36,8 +37,7 @@ class table_row:
         return self.day_to_full.get(self._days, "Unknown")
 
     def __str__(self):
-        return f"{self.crs_sec} {self.hrs} {self.title} {self.instructor} {self.room} {self.time} {self.date} {self.tm} {self.type} \n\n"
-
+        return f"{self.crs_sec} / {self.hrs} / {self.title} / {self.instructor} / {self.building} / {self.room} / {self.time} / {self.date} / {self.tm} / {self.type} \n\n"
 
 class table_header:
     def __init__(self, headers: list):
@@ -46,6 +46,19 @@ class table_header:
         self.major = headers[1].replace("Major: ", "")
         self.advisor = headers[2].replace("Advisor: ", "")
         self.program = headers[3]    
+
+def parse_notification(text: str) -> table_row:
+    data = text.split(" / ")
+    result = table_row
+    result.crs_sec = data[0]
+    result.hrs = data[1]
+    result.title = data[2]
+    result.instructor = data[3]
+    result.building = data[4]
+    result.room = data[5]
+    result.time = data[6]
+    result.date = data[7]
+    return result
 
 def get_header_from_pdf(pdf_path) -> list:
     with pdfplumber.open(pdf_path) as pdf:
@@ -73,10 +86,10 @@ def get_schedule_from_pdf(pdf_path: str) -> list:
 
 def prepare_for_schedule_table(pdf_path: str) -> Dict[str, str]:
     result = {"monday": "",
-              "tuesday": "",
-              "wednesday": "",
-              "thursday": "",
-              "friday": ""}
+            "tuesday": "",
+            "wednesday": "",
+            "thursday": "",
+            "friday": ""}
     
     schedule = get_schedule_from_pdf(pdf_path=pdf_path)
     for i in schedule:
@@ -99,16 +112,16 @@ async def receive_pdf(app: Client, message: Message) -> str:
 
         await app.delete_messages(message.chat.id, reply_message.id)
         await message.reply(texts.headers.format(headers.classification, 
-                                                 headers.major, 
-                                                 headers.advisor, 
-                                                 headers.program))
+                                                headers.major, 
+                                                headers.advisor, 
+                                                headers.program))
 
         schedule: dict = prepare_for_schedule_table(file_path)
 
         insertion_status:bool = orm.insert(message.from_user.id, 
-                                           message.from_user.username, 
-                                           document.file_id,
-                                           schedule) # запись в бд
+                                        message.from_user.username, 
+                                        document.file_id,
+                                        schedule) # запись в бд
         
 
         if insertion_status:
