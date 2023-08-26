@@ -164,7 +164,7 @@ async def update_schedule(client, message: Message, state: State) -> None:
 @app.on_message(filters.text & filters.regex("Отмена") & StateFilter(Parameters.updating_schedule))
 async def cancel(client, message: Message, state: State) -> None:
     await app.send_message(message.chat.id,
-                            "Отменено",
+                            "Canceled",
                             reply_markup=keyboards.main_menu)
     
 # Inline buttons
