@@ -146,8 +146,8 @@ def get_day_schedule(user_id: int, day: str) -> list:
 
 # Jobs
 
-def save_job(user_id: int, text: str, day_of_week: str, time: int) -> None:
-    """Сохраняет задачи для APScheduler
+def save_job(user_id: int, text: str, day_of_week: str, time: int) -> bool:
+    """Сохраняет задачи для APScheduler. Возвращает True, если задача уже есть.
 
     Args:
         user_id (int): _description_
@@ -158,14 +158,19 @@ def save_job(user_id: int, text: str, day_of_week: str, time: int) -> None:
     query_select = "SELECT * FROM jobs WHERE user_id = ? AND text = ? AND day_of_week = ? AND time = ?"
     query_insert = "INSERT INTO jobs (user_id, text, day_of_week, time) VALUES (?, ?, ?, ?)"
 
+    query_delete = "DELETE FROM jobs WHERE user_id = ? AND text = ? AND day_of_week = ? AND time = ?"
+
     cursor.execute(query_select, (user_id, text, day_of_week, time))
     existing_row = cursor.fetchone()
 
     if not existing_row:
         cursor.execute(query_insert, (user_id, text, day_of_week, time))
         conn.commit()
+        return False
     else:
-        print("Запись уже существует, не добавлена")
+        cursor.execute(query_delete, (user_id, text, day_of_week, time))
+        conn.commit()
+        return True
 
 def get_jobs() -> list:
     """Возвращает список асинхронных задач
@@ -181,4 +186,16 @@ def get_jobs() -> list:
     else:
         return None
     
+def get_job(user_id: int, text: str) -> list:
+    query = f'SELECT day_of_week, time FROM jobs WHERE user_id = {user_id} AND text = ?'
+    cursor.execute(query, (text,))
+    result = cursor.fetchall()
+    if result:
+        return result
+    else:
+        return None
 
+def delete_all_jobs(user_id: int) -> None:
+    query = "DELETE FROM jobs WHERE user_id = ?"
+    cursor.execute(query, (user_id,))
+    conn.commit()

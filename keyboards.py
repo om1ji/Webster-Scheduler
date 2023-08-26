@@ -26,25 +26,4 @@ notification_menu = InlineKeyboardMarkup(
     ]
 )
 
-notification_menu_9pm = InlineKeyboardMarkup(
-    [
-        [InlineKeyboardButton("9pm ✅", callback_data="9pm"),
-        InlineKeyboardButton("7am", callback_data="7am")]
-    ]
-)
-
-notification_menu_7am = InlineKeyboardMarkup(
-    [
-        [InlineKeyboardButton("9pm ", callback_data="9pm"),
-        InlineKeyboardButton("7am ✅", callback_data="7am")]
-    ]
-)
-
-notification_menu_both = InlineKeyboardMarkup(
-    [
-        [InlineKeyboardButton("9pm ✅", callback_data="9pm"),
-        InlineKeyboardButton("7am ✅", callback_data="7am")]
-    ]
-)
-
 feedback_menu = ReplyKeyboardMarkup([KeyboardButton("")])

@@ -121,13 +121,28 @@ async def get_day_schedule(client, message: Message, state: State) -> None:
         try:
             result = result[0][0].split("\n\n")
             for i in result[:-1]: # Ответ с fetchall приходит в виде (obj, obj,)
-                message_to_delete = await message.reply(message.text + "\n\n" + i, reply_markup=keyboards.notification_menu)
-                messages[message.chat.id].append(message_to_delete.id) # For bulk deleting messages after "Меню" button
-        except TypeError:
+
+                reply_markup = utils.form_inline_keyboard(message.from_user.id, i)
+                i = i[:-1] # Убрать пробел в конце
+
+                message_to_delete = await message.reply(message.text + "\n\n" + i, 
+                                                        reply_markup=reply_markup)
+                
+                try:
+                    messages[message.chat.id].append(message_to_delete.id) # For bulk deleting messages after "Меню" button
+                except KeyError:
+                    pass
+
+        except TypeError as e:
+            print(e.with_traceback())
             await state.set_state(Parameters.has_no_schedule)
             await app.send_message(message.chat.id, "У тебя нет расписания")
     else:
-        await message.reply("На этот день нет занятий")
+        message_to_delete = await message.reply("На этот день нет занятий")
+        try:
+            messages[message.chat.id].append(message_to_delete.id) # For bulk deleting messages after "Меню" button
+        except KeyError:
+            pass
 
 # Update schedule
 
@@ -136,9 +151,13 @@ async def update_schedule_message(client, message: Message, state: State) -> Non
     await state.set_state(Parameters.updating_schedule)
     await message.reply("Загрузи PDF", reply_markup=keyboards.update_menu)
 
+# Receive pdf
+
 @app.on_message(filters.document & StateFilter(Parameters.updating_schedule))
 async def update_schedule(client, message: Message, state: State) -> None:
     status = await receive_pdf(app, message)
+    orm.delete_all_jobs(message.from_user.id)
+    print(f"All jobs of {message.from_user.id} are deleted")
     await app.send_message(message.chat.id, status, reply_markup=keyboards.main_menu)
     await state.finish()
 
@@ -155,28 +174,36 @@ async def notify_handler(client, callback_query: CallbackQuery):
 
     time: int = utils.ampm_to_string(callback_query.data)
     user_id: int = callback_query.from_user.id
-    text: str = callback_query.message.text
-    day_of_week: str = text.lower().split("\n\n")[0][0:3]
+    text: str = callback_query.message.text.split("\n\n")
+    course: str = text[1]
+    day_of_week: str = text[0].lower()[0:3]
+
+    if callback_query.data == "9pm":
+        day_of_week = utils.convert_9pm(day_of_week)
 
     scheduler.add_job(notify, 
                       CronTrigger(hour=time, day_of_week=day_of_week), 
                       args=[user_id, text]
                       )
     
-    orm.save_job(user_id, text, day_of_week, time)
+    orm.save_job(user_id, course, day_of_week, time)
     
     await app.delete_messages(callback_query.from_user.id, callback_query.message.id)
     
     await app.answer_callback_query(callback_query.id,
                                     text=f"Notification set to {callback_query.data}",
                                     show_alert=True)
-    
+        
 def start_saved_jobs() -> None:
-    for job in orm.get_jobs():
-        scheduler.add_job(notify, 
-                      CronTrigger(hour=job[4], day_of_week=job[3]), 
-                      args=[job[1], job[2]]
-                      )
+    jobs = orm.get_jobs()
+    if jobs is not None:
+        for job in jobs:
+            scheduler.add_job(notify, 
+                        CronTrigger(hour=job[4], day_of_week=job[3]), 
+                        args=[job[1], job[2]]
+                        )
+    else:
+        print("No jobs found")
 
 def main() -> None:
     try:  
