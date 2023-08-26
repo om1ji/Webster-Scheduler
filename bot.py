@@ -91,14 +91,17 @@ async def require_schedule(client, message: Message, state: State) -> None:
 @app.on_message(filters.text & filters.regex("Расписание"))
 async def schedule_button_handler(client, message: Message, state: State) -> None:
     await app.send_message(message.chat.id,
-                           "Выбери день bruh",
+                           "Choose day",
                            reply_markup=keyboards.week_menu)
     
     messages[message.chat.id] = []
 
 @app.on_message((filters.text & filters.regex("Меню")) | filters.command("start"))
 async def main(client, message: Message, state: State) -> None:
-    await app.delete_messages(message.chat.id, messages[message.chat.id])
+    try:
+        await app.delete_messages(message.chat.id, messages[message.chat.id])
+    except KeyError:
+        pass
     await app.send_message(message.chat.id,
                             "Welcome to Webster Scheduler bot", 
                             reply_markup=keyboards.main_menu)
@@ -118,8 +121,8 @@ async def get_day_schedule(client, message: Message, state: State) -> None:
         try:
             result = result[0][0].split("\n\n")
             for i in result[:-1]: # Ответ с fetchall приходит в виде (obj, obj,)
-                message = await message.reply(message.text + "\n\n" + i, reply_markup=keyboards.notification_menu)
-                messages[message.chat.id].append(message.id) # For bulk deleting messages after "Меню" button
+                message_to_delete = await message.reply(message.text + "\n\n" + i, reply_markup=keyboards.notification_menu)
+                messages[message.chat.id].append(message_to_delete.id) # For bulk deleting messages after "Меню" button
         except TypeError:
             await state.set_state(Parameters.has_no_schedule)
             await app.send_message(message.chat.id, "У тебя нет расписания")
