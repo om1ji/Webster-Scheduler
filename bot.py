@@ -49,27 +49,23 @@ async def notify(user_id: int, text: str) -> None:
 
 # Initial
 
-@app.on_message(filters.command("start") & StateFilter())
-async def hello(client, message: Message, state: State):
-    await app.send_message(message.chat.id, 
-                           "Welcome to Webster Scheduler bot", 
-                           reply_markup=keyboards.main_menu)
-    
-    await state.set_state(Parameters.has_no_schedule)
+@app.on_message(filters.command("start") | (filters.text & filters.regex("Menu")))
+async def hello(client, message: Message, state: State) -> None:
+    if orm.check_user_for_presence(message.from_user.id):
+        await app.send_message(message.chat.id, 
+                            "Main menu", 
+                            reply_markup=keyboards.main_menu)
+    else:
+        await app.send_message(message.chat.id, 
+                            texts.hello, 
+                            reply_markup=keyboards.main_menu)
+        await state.set_state(Parameters.has_no_schedule)
 
 @app.on_message(filters.document & StateFilter(Parameters.has_no_schedule))
 async def receive_schedule(client, message: Message, state: State) -> None:
     status = await receive_pdf(app, message)
     await app.send_message(message.chat.id, status)
-    await state.finish()
-
-# Main menu
-
-@app.on_message(filters.command("start"))
-async def hello(client, message: Message, state: State) -> None:
-    await app.send_message(message.chat.id, 
-                           "Welcome to Webster Scheduler bot", 
-                           reply_markup=keyboards.main_menu)
+    await state.set_state("has_schedule")
 
 # Debug
 
@@ -84,11 +80,11 @@ async def debug(client, message: Message) -> None:
 
 @app.on_message(filters.text & StateFilter(Parameters.has_no_schedule))
 async def require_schedule(client, message: Message, state: State) -> None:
-    await message.reply("Загрузи PDF")
+    await message.reply("Upload PDF")
 
 # Get current schedule
 
-@app.on_message(filters.text & filters.regex("Расписание"))
+@app.on_message(filters.text & filters.regex("Schedule"))
 async def schedule_button_handler(client, message: Message, state: State) -> None:
     await app.send_message(message.chat.id,
                            "Choose day",
@@ -96,26 +92,12 @@ async def schedule_button_handler(client, message: Message, state: State) -> Non
     
     messages[message.chat.id] = []
 
-@app.on_message((filters.text & filters.regex("Меню")) | filters.command("start"))
-async def main(client, message: Message, state: State) -> None:
-    try:
-        await app.delete_messages(message.chat.id, messages[message.chat.id])
-    except KeyError:
-        pass
-    await app.send_message(message.chat.id,
-                            "Welcome to Webster Scheduler bot", 
-                            reply_markup=keyboards.main_menu)
-
 # Get daily schedule 
 
-@app.on_message(filters.text & (filters.regex("Monday") | \
-                                filters.regex("Tuesday") | \
-                                filters.regex("Wednesday") | \
-                                filters.regex("Thursday") | \
-                                filters.regex("Friday"))
-                )
+@app.on_message(filters.text & filters.regex(r"^[MTWRF]$"))
 async def get_day_schedule(client, message: Message, state: State) -> None:
-    result = orm.get_day_schedule(message.from_user.id, message.text.lower())
+    day_of_week = utils.convert_letter_to_day_of_week(message.text)
+    result = orm.get_day_schedule(message.from_user.id, day_of_week)
     await app.delete_messages(message.chat.id, message.id)
     if result != [('',)]:
         try:
@@ -125,7 +107,7 @@ async def get_day_schedule(client, message: Message, state: State) -> None:
                 reply_markup = utils.form_inline_keyboard(message.from_user.id, i)
                 i = i[:-1] # Убрать пробел в конце
 
-                message_to_delete = await message.reply(message.text + "\n\n" + i, 
+                message_to_delete = await message.reply(day_of_week + "\n\n" + i, 
                                                         reply_markup=reply_markup)
                 
                 try:
@@ -136,9 +118,9 @@ async def get_day_schedule(client, message: Message, state: State) -> None:
         except TypeError as e:
             print(e.with_traceback())
             await state.set_state(Parameters.has_no_schedule)
-            await app.send_message(message.chat.id, "У тебя нет расписания")
+            await app.send_message(message.chat.id, "You have no schedule. Upload a PDF")
     else:
-        message_to_delete = await message.reply("На этот день нет занятий")
+        message_to_delete = await message.reply(message.text + "\n\n" + "No courses this day")
         try:
             messages[message.chat.id].append(message_to_delete.id) # For bulk deleting messages after "Меню" button
         except KeyError:
@@ -146,10 +128,24 @@ async def get_day_schedule(client, message: Message, state: State) -> None:
 
 # Update schedule
 
-@app.on_message(filters.text & filters.regex("Обновить расписание"))
+@app.on_message(filters.text & filters.regex("Update schedule"))
 async def update_schedule_message(client, message: Message, state: State) -> None:
     await state.set_state(Parameters.updating_schedule)
-    await message.reply("Загрузи PDF", reply_markup=keyboards.update_menu)
+    await message.reply("Upload PDF", reply_markup=keyboards.update_menu)
+
+# Feedback
+
+@app.on_message(filters.text & filters.regex("Feedback"))
+async def feedback_menu(client, message: Message) -> None:
+    await message.reply(texts.feedback, reply_markup=keyboards.feedback_menu)
+
+@app.on_message(filters.text & filters.regex("Check feedback"))
+async def show_link(client, message: Message) -> None:
+    await message.reply("https://docs.google.com/spreadsheets/d/1RumzCUn7BHCv7TsHnYo5nWCqfBmZ2OTw3il0wdpQCvE/edit?resourcekey#gid=1751046026")
+
+@app.on_message(filters.text & filters.regex("Leave feedback"))
+async def show_link(client, message: Message) -> None:
+    await message.reply("https://docs.google.com/forms/d/e/1FAIpQLSfq8wxX5t4LA92VFhiTgRa037xLN6nWtToClYb0RCa1PNgjCw/viewform")
 
 # Receive pdf
 
@@ -161,7 +157,7 @@ async def update_schedule(client, message: Message, state: State) -> None:
     await app.send_message(message.chat.id, status, reply_markup=keyboards.main_menu)
     await state.finish()
 
-@app.on_message(filters.text & filters.regex("Отмена") & StateFilter(Parameters.updating_schedule))
+@app.on_message(filters.text & filters.regex("Cancel") & StateFilter(Parameters.updating_schedule))
 async def cancel(client, message: Message, state: State) -> None:
     await app.send_message(message.chat.id,
                             "Canceled",

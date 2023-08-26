@@ -53,13 +53,13 @@ def form_inline_keyboard(user_id: int, text: str) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(buttons)
 
 def convert_9pm(day_of_week: str) -> str:
-    if day_of_week == "mon":
-        return "sun"
-    elif day_of_week == "tue":
-        return "mon"
-    elif day_of_week == "wed":
-        return "tue"
-    elif day_of_week == "thu":
-        return "wed"
-    elif day_of_week == "fri":
-        return "thu"
+    days = ["sun", "mon", "tue", "wed", "thu", "fri"]
+    return days[days.index(day_of_week)-1]
+    
+def convert_letter_to_day_of_week(letter: str) -> str:
+    return {"M": "Monday", 
+            "T": "Tuesday", 
+            "W": "Wednesday", 
+            "R": "Thursday",
+            "F": "Friday"
+            }[letter]

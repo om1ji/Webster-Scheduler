@@ -199,3 +199,9 @@ def delete_all_jobs(user_id: int) -> None:
     query = "DELETE FROM jobs WHERE user_id = ?"
     cursor.execute(query, (user_id,))
     conn.commit()
+
+def check_user_for_presence(user_id: int) -> bool:
+    query = "SELECT * FROM users WHERE user_id = ?"
+    cursor.execute(query, (user_id,))
+    result = cursor.fetchone()
+    return result
