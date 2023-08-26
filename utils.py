@@ -8,7 +8,7 @@ def ampm_to_string(input_str: str) -> int:
     9pm -> 21
     7am -> 7
 
-    :param input_str: Время вида XX(p/a)m
+    :param input_str: Время вида XX (p/a)m
     :type input_str: str
     :return: Час вида XX
     :rtype: int
