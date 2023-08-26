@@ -203,7 +203,7 @@ def start_saved_jobs() -> None:
                         args=[job[1], job[2]]
                         )
     else:
-        print("No jobs found")
+        print("No jobs found :)")
 
 def main() -> None:
     try:  
