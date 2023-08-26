@@ -33,6 +33,8 @@ patch_manager.set_storage(MemoryStorage())
 
 scheduler = AsyncIOScheduler()
 
+messages = {}
+
 async def notify(user_id: int, text: str) -> None:
     result = parse_notification(text)
     message_text = texts.notification.format(result.crs_sec, 
@@ -70,6 +72,7 @@ async def hello(client, message: Message, state: State) -> None:
                            reply_markup=keyboards.main_menu)
 
 # Debug
+
 @app.on_message(filters.command("debug"))
 async def debug(client, message: Message) -> None:
     response = [job for job in scheduler.get_jobs()]
@@ -91,9 +94,11 @@ async def schedule_button_handler(client, message: Message, state: State) -> Non
                            "Выбери день bruh",
                            reply_markup=keyboards.week_menu)
     
+    messages[message.chat.id] = []
 
 @app.on_message((filters.text & filters.regex("Меню")) | filters.command("start"))
 async def main(client, message: Message, state: State) -> None:
+    await app.delete_messages(message.chat.id, messages[message.chat.id])
     await app.send_message(message.chat.id,
                             "Welcome to Webster Scheduler bot", 
                             reply_markup=keyboards.main_menu)
@@ -106,13 +111,18 @@ async def main(client, message: Message, state: State) -> None:
                                 filters.regex("Thursday") | \
                                 filters.regex("Friday"))
                 )
-async def get_day_schedule(client, message: Message) -> None:
+async def get_day_schedule(client, message: Message, state: State) -> None:
     result = orm.get_day_schedule(message.from_user.id, message.text.lower())
     await app.delete_messages(message.chat.id, message.id)
-    if result != [('',), ('',)]:
-        result = result[0][0].split("\n\n")
-        for i in result[:-1]: # Ответ с fetchall приходит в виде (obj, obj,)
-            await message.reply(message.text + "\n\n" + i, reply_markup=keyboards.notification_menu)
+    if result != [('',)]:
+        try:
+            result = result[0][0].split("\n\n")
+            for i in result[:-1]: # Ответ с fetchall приходит в виде (obj, obj,)
+                message = await message.reply(message.text + "\n\n" + i, reply_markup=keyboards.notification_menu)
+                messages[message.chat.id].append(message.id) # For bulk deleting messages after "Меню" button
+        except TypeError:
+            await state.set_state(Parameters.has_no_schedule)
+            await app.send_message(message.chat.id, "У тебя нет расписания")
     else:
         await message.reply("На этот день нет занятий")
 
@@ -139,20 +149,36 @@ async def cancel(client, message: Message, state: State) -> None:
 
 @app.on_callback_query(filters.regex("9pm") | filters.regex("7am"))
 async def notify_handler(client, callback_query: CallbackQuery):
-    time = utils.ampm_to_string(callback_query.data)
-    day_of_week = callback_query.message.text.lower().split("\n\n")[0][0:3]
+
+    time: int = utils.ampm_to_string(callback_query.data)
+    user_id: int = callback_query.from_user.id
+    text: str = callback_query.message.text
+    day_of_week: str = text.lower().split("\n\n")[0][0:3]
+
     scheduler.add_job(notify, 
                       CronTrigger(hour=time, day_of_week=day_of_week), 
-                      args=[callback_query.from_user.id, callback_query.message.text]
+                      args=[user_id, text]
                       )
+    
+    orm.save_job(user_id, text, day_of_week, time)
+    
     await app.delete_messages(callback_query.from_user.id, callback_query.message.id)
     
     await app.answer_callback_query(callback_query.id,
                                     text=f"Notification set to {callback_query.data}",
                                     show_alert=True)
+    
+def start_saved_jobs() -> None:
+    for job in orm.get_jobs():
+        scheduler.add_job(notify, 
+                      CronTrigger(hour=job[4], day_of_week=job[3]), 
+                      args=[job[1], job[2]]
+                      )
+
 def main() -> None:
     try:  
-        orm.create()
+        orm.create_tables()
+        start_saved_jobs()
         scheduler.start()
         app.run()
     except KeyboardInterrupt:

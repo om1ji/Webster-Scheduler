@@ -1,6 +1,6 @@
 from datetime import datetime
 
-def ampm_to_string(input_str: str) -> str:
+def ampm_to_string(input_str: str) -> int:
     """Переводит строку типа "9am", "7pm" в число часа
     9pm -> 21
     7am -> 7
@@ -8,7 +8,7 @@ def ampm_to_string(input_str: str) -> str:
     :param input_str: Время вида XX(p/a)m
     :type input_str: str
     :return: Час вида XX
-    :rtype: str
+    :rtype: int
     """
     try:
         dt = datetime.strptime(input_str, '%I%p')
