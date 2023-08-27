@@ -15,7 +15,8 @@ def create_users_table() -> None:
                 username TEXT,
                 file_id TEXT,
                 notification_time TEXT,
-                UNIQUE(user_id, file_id)
+                qr TEXT,
+                UNIQUE(user_id, file_id, qr)
             );
         '''
     
@@ -205,3 +206,17 @@ def check_user_for_presence(user_id: int) -> bool:
     cursor.execute(query, (user_id,))
     result = cursor.fetchone()
     return result
+
+def check_qr_for_presence(user_id: int) -> str:
+    query = "SELECT qr FROM users WHERE user_id = ?"
+    cursor.execute(query, (user_id,))
+    result = cursor.fetchone()
+    if result:
+        return result[0]
+    else:
+        return None
+    
+def upload_qr(user_id: int, file_id: str) -> None:
+    query = "UPDATE users SET qr = ? WHERE user_id = ?"
+    cursor.execute(query, (file_id, user_id,))
+    conn.commit()

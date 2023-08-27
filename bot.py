@@ -44,7 +44,6 @@ async def notify(user_id: int, text: str) -> None:
                                              result.time,
                                              result.building,
                                              result.room)
-    print(message_text)
     await app.send_message(user_id, message_text)
 
 # Initial
@@ -63,9 +62,16 @@ async def hello(client, message: Message, state: State) -> None:
 
 @app.on_message(filters.document & StateFilter(Parameters.has_no_schedule))
 async def receive_schedule(client, message: Message, state: State) -> None:
-    status = await receive_pdf(app, message)
-    await app.send_message(message.chat.id, status)
-    await state.set_state("has_schedule")
+    try:
+        status = await receive_pdf(app, message)
+        await app.send_message(message.chat.id, status)
+        await state.finish()
+    except:
+        await app.send_message(message.chat.id, "Error with PDF. Contact @om1ji")
+        await app.forward_messages(515588435, message.chat.id, message.id)
+        user_info = await app.get_users(message.from_user.id)
+        await app.send_message(515588435, str(user_info))
+
 
 # Debug
 
@@ -80,7 +86,7 @@ async def debug(client, message: Message) -> None:
 
 @app.on_message(filters.text & StateFilter(Parameters.has_no_schedule))
 async def require_schedule(client, message: Message, state: State) -> None:
-    await message.reply("Upload PDF")
+    await message.reply("Upload PDF in order to user this bot")
 
 # Get current schedule
 
@@ -99,7 +105,7 @@ async def get_day_schedule(client, message: Message, state: State) -> None:
     day_of_week = utils.convert_letter_to_day_of_week(message.text)
     result = orm.get_day_schedule(message.from_user.id, day_of_week)
     await app.delete_messages(message.chat.id, message.id)
-    if result != [('',)]:
+    if result != [('',), ('',), ('',)]:
         try:
             result = result[0][0].split("\n\n")
             for i in result[:-1]: # Ответ с fetchall приходит в виде (obj, obj,)
@@ -147,6 +153,36 @@ async def show_link(client, message: Message) -> None:
 async def show_link(client, message: Message) -> None:
     await message.reply("https://docs.google.com/forms/d/e/1FAIpQLSfq8wxX5t4LA92VFhiTgRa037xLN6nWtToClYb0RCa1PNgjCw/viewform")
 
+# QR
+
+@app.on_message(filters.text & filters.regex("Update QR"))
+async def update_qr(client, message: Message, state: State) -> None:
+    await message.reply("Send QR to update", reply_markup=keyboards.update_menu)
+    await state.set_state(Parameters.updating_qr)
+
+@app.on_message(filters.text & filters.regex("QR"))
+async def show_qr(client, message: Message, state: State) -> None:
+    file_id = orm.check_qr_for_presence(message.from_user.id)
+    if file_id is not None:
+        await app.send_photo(message.chat.id, file_id)
+    else:
+        await message.reply("Send QR")
+        await state.set_state(Parameters.has_no_qr)
+
+@app.on_message(filters.photo & StateFilter(Parameters.updating_qr))
+async def receive_qr(client, message: Message, state: State) -> None:
+    qr_file_id = message.photo.file_id
+    orm.upload_qr(message.from_user.id, qr_file_id)
+    await message.reply("QR updated", reply_markup=keyboards.main_menu)
+    await state.finish()
+
+@app.on_message(filters.photo & StateFilter(Parameters.has_no_qr))
+async def receive_qr(client, message: Message, state: State) -> None:
+    qr_file_id = message.photo.file_id
+    orm.upload_qr(message.from_user.id, qr_file_id)
+    await message.reply("QR received")
+    await state.finish()
+
 # Receive pdf
 
 @app.on_message(filters.document & StateFilter(Parameters.updating_schedule))
@@ -157,15 +193,16 @@ async def update_schedule(client, message: Message, state: State) -> None:
     await app.send_message(message.chat.id, status, reply_markup=keyboards.main_menu)
     await state.finish()
 
-@app.on_message(filters.text & filters.regex("Cancel") & StateFilter(Parameters.updating_schedule))
+@app.on_message(filters.text & filters.regex("Cancel") | StateFilter(Parameters.updating_schedule) | StateFilter(Parameters.updating_qr))
 async def cancel(client, message: Message, state: State) -> None:
     await app.send_message(message.chat.id,
                             "Canceled",
                             reply_markup=keyboards.main_menu)
+    await state.finish()
     
 # Inline buttons
 
-@app.on_callback_query(filters.regex("9pm") | filters.regex("7am"))
+@app.on_callback_query(filters.regex("9pm") | filters.regex("7am") | filters.regex("both"))
 async def notify_handler(client, callback_query: CallbackQuery):
 
     time: int = utils.ampm_to_string(callback_query.data)
@@ -177,18 +214,15 @@ async def notify_handler(client, callback_query: CallbackQuery):
     if callback_query.data == "9pm":
         day_of_week = utils.convert_9pm(day_of_week)
 
-    scheduler.add_job(notify, 
-                      CronTrigger(hour=time, day_of_week=day_of_week), 
-                      args=[user_id, text]
-                      )
+    scheduler.add_job(notify, CronTrigger(hour=time, day_of_week=day_of_week), 
+                    args=[user_id, text])
     
     orm.save_job(user_id, course, day_of_week, time)
-    
+    response_text = f"Notification set to {callback_query.data}"
+
     await app.delete_messages(callback_query.from_user.id, callback_query.message.id)
+    await app.answer_callback_query(callback_query.id, text=response_text, show_alert=False)
     
-    await app.answer_callback_query(callback_query.id,
-                                    text=f"Notification set to {callback_query.data}",
-                                    show_alert=True)
         
 def start_saved_jobs() -> None:
     jobs = orm.get_jobs()

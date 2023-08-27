@@ -103,7 +103,7 @@ async def receive_pdf(app: Client, message: Message) -> str:
     """
     document = message.document
     if document.mime_type == "application/pdf":
-        reply_message = await message.reply("Загрузка")
+        reply_message = await message.reply("Loading")
 
         file_path = os.path.join("./downloads", document.file_id + ".pdf")
         await message.download(file_name=file_path) # сохраняет
@@ -125,9 +125,9 @@ async def receive_pdf(app: Client, message: Message) -> str:
         
 
         if insertion_status:
-            return "Расписание обновлено"
+            return "Schedule updated"
         else:
-            return "Расписание добавлено"
+            return "Schedule added"
         
 def compare_days(day1: table_row, day2: table_row):
     days_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
