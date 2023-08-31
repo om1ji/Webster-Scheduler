@@ -147,54 +147,39 @@ def get_day_schedule(user_id: int, day: str) -> list:
 
 # Jobs
 
-def save_job(user_id: int, text: str, day_of_week: str, time: int) -> bool:
-    """Сохраняет задачи для APScheduler. Возвращает True, если задача уже есть.
-
-    Args:
-        user_id (int): _description_
-        text (str): _description_
-        day_of_week (str): _description_
-        time (int): _description_
-    """
+def save_job(user_id: int, text: str, day_of_week: str, time: int) -> None:
     query_select = "SELECT * FROM jobs WHERE user_id = ? AND text = ? AND day_of_week = ? AND time = ?"
-    query_insert = "INSERT INTO jobs (user_id, text, day_of_week, time) VALUES (?, ?, ?, ?)"
-
-    query_delete = "DELETE FROM jobs WHERE user_id = ? AND text = ? AND day_of_week = ? AND time = ?"
-
     cursor.execute(query_select, (user_id, text, day_of_week, time))
-    existing_row = cursor.fetchone()
-
-    if not existing_row:
+    existing_record = cursor.fetchone()
+    
+    if not existing_record:
+        query_insert = "INSERT INTO jobs (user_id, text, day_of_week, time) VALUES (?, ?, ?, ?)"
         cursor.execute(query_insert, (user_id, text, day_of_week, time))
         conn.commit()
-        return False
-    else:
-        cursor.execute(query_delete, (user_id, text, day_of_week, time))
-        conn.commit()
-        return True
+
+def delete_job(user_id: int, text: str, day_of_week: str, time: int) -> None:
+    query_delete = "DELETE FROM jobs WHERE user_id = ? AND text = ? AND day_of_week = ? AND time = ?"
+    cursor.execute(query_delete, (user_id, text, day_of_week, time))
+    conn.commit()
 
 def get_jobs() -> list:
-    """Возвращает список асинхронных задач
-
-    Returns:
-        list: _description_
-    """
+    """Возвращает список асинхронных задач"""
     query = "SELECT * FROM jobs"
     cursor.execute(query)
-    result = cursor.fetchall()
-    if result:
-        return result
-    else:
-        return None
+    return cursor.fetchall()
     
-def get_job(user_id: int, text: str) -> list:
-    query = f'SELECT day_of_week, time FROM jobs WHERE user_id = {user_id} AND text = ?'
-    cursor.execute(query, (text,))
-    result = cursor.fetchall()
-    if result:
-        return result
+def get_job(user_id: int, text: str, day_of_week: str = None, time: int = None) -> list:
+    query = 'SELECT day_of_week, time FROM jobs WHERE user_id = ? AND text = ?'
+    
+    if time and day_of_week:
+        query = "SELECT * FROM jobs WHERE user_id = ? AND text = ? AND day_of_week = ? AND time = ?"
+        cursor.execute(query, (user_id, text, day_of_week, time))
+        result = cursor.fetchone()
     else:
-        return None
+        cursor.execute(query, (user_id, text))
+        result = cursor.fetchall()
+
+    return result
 
 def delete_all_jobs(user_id: int) -> None:
     query = "DELETE FROM jobs WHERE user_id = ?"

@@ -3,8 +3,6 @@ from pyrogram import Client
 from pyrogram.types import Message
 
 import os
-from typing import List
-from functools import cmp_to_key
 from typing import Dict
 
 import texts
@@ -47,6 +45,9 @@ class table_header:
         self.advisor = headers[2].replace("Advisor: ", "")
         self.program = headers[3]    
 
+    def __str__(self):
+        return f"{self.name_surname} {self.classification} {self.major} {self.advisor} {self.program}"
+
 def parse_notification(text: str) -> table_row:
     data = text.split(" / ")
     result = table_row
@@ -77,9 +78,11 @@ def get_schedule_from_pdf(pdf_path: str) -> list:
         for page in pdf.pages:
             table = page.extract_tables()[0]  
             for row in table[5:-1]:
+                print(row)
                 trow = [item for item in row if item is not None] 
                 trow = [str(item).replace("\n", "") for item in trow]
                 if trow != ['']:
+                    
                     table_rows.append(table_row(trow))
                     
     return table_rows
@@ -128,8 +131,12 @@ async def receive_pdf(app: Client, message: Message) -> str:
             return "Schedule updated"
         else:
             return "Schedule added"
+    else:
+        return """Please make sure it is a readable PDF, not JPG, PNG, CGI or whatever else.
+Also check if PDF does not contain image, so text can be copied from the file.
+
+Contacts: @om1ji"""
         
 def compare_days(day1: table_row, day2: table_row):
     days_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
     return days_order.index(day1) - days_order.index(day2)
-

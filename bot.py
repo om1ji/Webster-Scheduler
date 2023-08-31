@@ -3,12 +3,13 @@ Pyrogram framework for Telegram bot
 Custom modules and pdf worker
 """
 from pyrogram import Client, filters
-from pyrogram.types import Message, CallbackQuery
+from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup
 from pyrogram_patch.fsm.storages import MemoryStorage
 from pyrogram_patch.fsm.filter import StateFilter
 from pyrogram.types import CallbackQuery
 from pyrogram_patch.fsm import State
 from pyrogram_patch import patch
+from pyrogram.errors.exceptions.bad_request_400 import MessageNotModified
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -22,7 +23,7 @@ import utils
 import texts
 
 app = Client(
-                name="webster",
+                name="webster_dev",
                 api_hash=consts.API_HASH,
                 api_id=consts.API_ID,
                 bot_token=consts.BOT_TOKEN
@@ -54,6 +55,7 @@ async def hello(client, message: Message, state: State) -> None:
         await app.send_message(message.chat.id, 
                             "Main menu", 
                             reply_markup=keyboards.main_menu)
+        await app.delete_messages(message.chat.id, messages[message.chat.id])
     else:
         await app.send_message(message.chat.id, 
                             texts.hello, 
@@ -105,13 +107,13 @@ async def get_day_schedule(client, message: Message, state: State) -> None:
     day_of_week = utils.convert_letter_to_day_of_week(message.text)
     result = orm.get_day_schedule(message.from_user.id, day_of_week)
     await app.delete_messages(message.chat.id, message.id)
-    if result != [('',), ('',), ('',)]:
+    if result != [('',)]:
         try:
             result = result[0][0].split("\n\n")
             for i in result[:-1]: # Ответ с fetchall приходит в виде (obj, obj,)
 
-                reply_markup = utils.form_inline_keyboard(message.from_user.id, i)
                 i = i[:-1] # Убрать пробел в конце
+                reply_markup = utils.form_inline_keyboard(message.from_user.id, i)
 
                 message_to_delete = await message.reply(day_of_week + "\n\n" + i, 
                                                         reply_markup=reply_markup)
@@ -202,28 +204,18 @@ async def cancel(client, message: Message, state: State) -> None:
     
 # Inline buttons
 
-@app.on_callback_query(filters.regex("9pm") | filters.regex("7am") | filters.regex("both"))
+@app.on_callback_query(filters.regex("7am") | filters.regex("9pm"))
 async def notify_handler(client, callback_query: CallbackQuery):
+    text = utils.set_notification(callback_query, notify, scheduler)
+    await callback_query.answer(text)
 
-    time: int = utils.ampm_to_string(callback_query.data)
-    user_id: int = callback_query.from_user.id
-    text: str = callback_query.message.text.split("\n\n")
-    course: str = text[1]
-    day_of_week: str = text[0].lower()[0:3]
+    reply_markup = utils.form_inline_keyboard(callback_query.from_user.id, 
+                                              callback_query.message.text,
+                                              is_button_call=True)
+    await callback_query.message.edit_reply_markup(reply_markup)
 
-    if callback_query.data == "9pm":
-        day_of_week = utils.convert_9pm(day_of_week)
+# Functions
 
-    scheduler.add_job(notify, CronTrigger(hour=time, day_of_week=day_of_week), 
-                    args=[user_id, text])
-    
-    orm.save_job(user_id, course, day_of_week, time)
-    response_text = f"Notification set to {callback_query.data}"
-
-    await app.delete_messages(callback_query.from_user.id, callback_query.message.id)
-    await app.answer_callback_query(callback_query.id, text=response_text, show_alert=False)
-    
-        
 def start_saved_jobs() -> None:
     jobs = orm.get_jobs()
     if jobs is not None:
@@ -248,13 +240,3 @@ def main() -> None:
 
 if __name__=="__main__":
     main()
-
-#
-# Feedback support
-# Leave Feedback -> Выходит список из кнопок учителей, 
-# которых взяли из расписания. Нажимаем на кнопку учителя -> 
-# Сообщение-приглашение написать фидбек. Пользователь пишет 
-# фидбек. отправляет боту, бот сохраняет в базе данных.
-# 
-# Check feedback -> Пишут имя учителя, как в расписании ->
-# 
