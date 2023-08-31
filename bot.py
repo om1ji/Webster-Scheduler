@@ -3,12 +3,13 @@ Pyrogram framework for Telegram bot
 Custom modules and pdf worker
 """
 from pyrogram import Client, filters
-from pyrogram.types import Message, CallbackQuery
+from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup
 from pyrogram_patch.fsm.storages import MemoryStorage
 from pyrogram_patch.fsm.filter import StateFilter
 from pyrogram.types import CallbackQuery
 from pyrogram_patch.fsm import State
 from pyrogram_patch import patch
+from pyrogram.errors.exceptions.bad_request_400 import MessageNotModified
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -22,7 +23,7 @@ import utils
 import texts
 
 app = Client(
-                name="webster",
+                name="webster_dev",
                 api_hash=consts.API_HASH,
                 api_id=consts.API_ID,
                 bot_token=consts.BOT_TOKEN
@@ -54,6 +55,7 @@ async def hello(client, message: Message, state: State) -> None:
         await app.send_message(message.chat.id, 
                             "Main menu", 
                             reply_markup=keyboards.main_menu)
+        await app.delete_messages(message.chat.id, messages[message.chat.id])
     else:
         await app.send_message(message.chat.id, 
                             texts.hello, 
@@ -108,16 +110,16 @@ async def get_day_schedule(client, message: Message, state: State) -> None:
     if result != [('',), ('',), ('',)]:
         try:
             result = result[0][0].split("\n\n")
-            for i in result[:-1]: # Îòâåò ñ fetchall ïðèõîäèò â âèäå (obj, obj,)
+            for i in result[:-1]: # ÐžÑ‚Ð²ÐµÑ‚ Ñ fetchall Ð¿Ñ€Ð¸Ñ…Ð¾Ð´Ð¸Ñ‚ Ð² Ð²Ð¸Ð´Ðµ (obj, obj,)
 
+                i = i[:-1] # Ð£Ð±Ñ€Ð°Ñ‚ÑŒ Ð¿Ñ€Ð¾Ð±ÐµÐ» Ð² ÐºÐ¾Ð½Ñ†Ðµ
                 reply_markup = utils.form_inline_keyboard(message.from_user.id, i)
-                i = i[:-1] # Óáðàòü ïðîáåë â êîíöå
 
                 message_to_delete = await message.reply(day_of_week + "\n\n" + i, 
                                                         reply_markup=reply_markup)
                 
                 try:
-                    messages[message.chat.id].append(message_to_delete.id) # For bulk deleting messages after "Ìåíþ" button
+                    messages[message.chat.id].append(message_to_delete.id) # For bulk deleting messages after "ÐœÐµÐ½ÑŽ" button
                 except KeyError:
                     pass
 
@@ -128,7 +130,7 @@ async def get_day_schedule(client, message: Message, state: State) -> None:
     else:
         message_to_delete = await message.reply(message.text + "\n\n" + "No courses this day")
         try:
-            messages[message.chat.id].append(message_to_delete.id) # For bulk deleting messages after "Ìåíþ" button
+            messages[message.chat.id].append(message_to_delete.id) # For bulk deleting messages after "ÐœÐµÐ½ÑŽ" button
         except KeyError:
             pass
 
@@ -192,9 +194,8 @@ async def update_schedule(client, message: Message, state: State) -> None:
         orm.delete_all_jobs(message.from_user.id)
         print(f"All jobs of {message.from_user.id} are deleted")
         await state.finish()
-        await app.send_message(message.chat.id, status, reply_markup=keyboards.main_menu)
     except TypeError as e:
-        await app.send_message(message.chat.id, e, reply_markup=keyboards.main_menu)
+        await app.send_message(message.chat.id, e, reply_markup=keyboards.main_menu)        
 
 @app.on_message(filters.text & filters.regex("Cancel") | StateFilter(Parameters.updating_schedule) | StateFilter(Parameters.updating_qr))
 async def cancel(client, message: Message, state: State) -> None:
@@ -205,28 +206,18 @@ async def cancel(client, message: Message, state: State) -> None:
     
 # Inline buttons
 
-@app.on_callback_query(filters.regex("9pm") | filters.regex("7am"))
+@app.on_callback_query(filters.regex("7am") | filters.regex("9pm"))
 async def notify_handler(client, callback_query: CallbackQuery):
+    text = utils.set_notification(callback_query, notify, scheduler)
+    await callback_query.answer(text)
 
-    time: int = utils.ampm_to_string(callback_query.data)
-    user_id: int = callback_query.from_user.id
-    text: str = callback_query.message.text.split("\n\n")
-    course: str = text[1]
-    day_of_week: str = text[0].lower()[0:3]
+    reply_markup = utils.form_inline_keyboard(callback_query.from_user.id, 
+                                              callback_query.message.text,
+                                              is_button_call=True)
+    await callback_query.message.edit_reply_markup(reply_markup)
 
-    if callback_query.data == "9pm":
-        day_of_week = utils.convert_9pm(day_of_week)
+# Functions
 
-    scheduler.add_job(notify, CronTrigger(hour=time, day_of_week=day_of_week), 
-                    args=[user_id, text])
-    
-    orm.save_job(user_id, course, day_of_week, time)
-    response_text = f"Notification set to {callback_query.data}"
-
-    await callback_data.mes
-    await app.answer_callback_query(callback_query.id, text=response_text)
-    
-        
 def start_saved_jobs() -> None:
     jobs = orm.get_jobs()
     if jobs is not None:
